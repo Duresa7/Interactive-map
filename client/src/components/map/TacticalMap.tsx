@@ -369,7 +369,7 @@ export function TacticalMap({ selectedTool, onPlanetSelect, selectedPlanet }: Ta
       </button>
 
       {/* Zoom controls */}
-      <div className="absolute bottom-4 right-4 z-20 flex flex-col gap-2">
+      <div className="absolute bottom-6 left-6 z-20 flex flex-col gap-2">
         <button onClick={() => setViewBox(prev => ({ ...prev, width: prev.width * 0.8, height: prev.height * 0.8 }))} className="cut-corner-sm bg-[#0a1628]/80 border border-cyan-500/30 w-10 h-10 flex items-center justify-center text-cyan-400 text-xl font-bold hover:bg-cyan-500/20 transition-colors">+</button>
         <button onClick={() => setViewBox(prev => ({ ...prev, width: prev.width * 1.2, height: prev.height * 1.2 }))} className="cut-corner-sm bg-[#0a1628]/80 border border-cyan-500/30 w-10 h-10 flex items-center justify-center text-cyan-400 text-xl font-bold hover:bg-cyan-500/20 transition-colors">−</button>
         <button onClick={() => setViewBox({ x: 0, y: 0, width: 1000, height: 800 })} className="cut-corner-sm bg-[#0a1628]/80 border border-cyan-500/30 w-10 h-10 flex items-center justify-center text-cyan-400 text-xs font-mono hover:bg-cyan-500/20 transition-colors">⌂</button>
