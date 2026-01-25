@@ -35,13 +35,6 @@ export function PlanetInfoModal({ planet, onClose }: PlanetInfoModalProps) {
     }
   };
 
-  const getFactionColorClasses = (color: string) => ({
-    border: `border-${color}-500/30`,
-    bg: `bg-${color}-950/20`,
-    text: `text-${color}-300`,
-    textDim: `text-${color}-400`,
-  });
-
   return (
     <div className="absolute top-24 right-4 z-30 w-96 scanline">
       <div className={`cut-corner bg-[#0a1628]/95 border backdrop-blur-md ${getFactionBorderClass()}`}>
