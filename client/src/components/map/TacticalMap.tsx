@@ -137,11 +137,18 @@ export function TacticalMap({ selectedTool, onPlanetSelect, selectedPlanet }: Ta
   const screenToSVG = useCallback((clientX: number, clientY: number) => {
     if (!svgRef.current) return { x: 0, y: 0 };
     const svg = svgRef.current;
-    const rect = svg.getBoundingClientRect();
-    const x = ((clientX - rect.left) / rect.width) * viewBox.width + viewBox.x;
-    const y = ((clientY - rect.top) / rect.height) * viewBox.height + viewBox.y;
-    return { x, y };
-  }, [viewBox]);
+    
+    // Use standard SVG coordinate transformation for precision
+    let point = svg.createSVGPoint();
+    point.x = clientX;
+    point.y = clientY;
+    
+    const ctm = svg.getScreenCTM();
+    if (ctm) {
+      point = point.matrixTransform(ctm.inverse());
+    }
+    return { x: point.x, y: point.y };
+  }, []);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (selectedTool === 'select' && !draggingPlanet) {
@@ -158,8 +165,13 @@ export function TacticalMap({ selectedTool, onPlanetSelect, selectedPlanet }: Ta
     }
     
     if (isPanning && !draggingPlanet) {
-      const dx = (e.clientX - panStart.x) * (viewBox.width / (svgRef.current?.clientWidth || 1));
-      const dy = (e.clientY - panStart.y) * (viewBox.height / (svgRef.current?.clientHeight || 1));
+      // For panning, we just need relative movement
+      // We can approximate this or use the CTM scale ideally, but simple ratio works ok for panning feel
+      // to match exact 1:1 mouse movement we need to scale by the zoom level
+      const zoomScale = viewBox.width / (svgRef.current?.getBoundingClientRect().width || 1);
+      const dx = (e.clientX - panStart.x) * zoomScale;
+      const dy = (e.clientY - panStart.y) * zoomScale;
+      
       setViewBox(prev => ({ ...prev, x: prev.x - dx, y: prev.y - dy }));
       setPanStart({ x: e.clientX, y: e.clientY });
     }
@@ -178,15 +190,22 @@ export function TacticalMap({ selectedTool, onPlanetSelect, selectedPlanet }: Ta
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
+    
+    // Get mouse position in SVG coordinates before zoom
     const coords = screenToSVG(e.clientX, e.clientY);
+    
     setViewBox(prev => {
       const newWidth = Math.min(Math.max(prev.width * zoomFactor, 400), 2000);
       const newHeight = Math.min(Math.max(prev.height * zoomFactor, 320), 1600);
-      const widthRatio = newWidth / prev.width;
-      const heightRatio = newHeight / prev.height;
+      
+      // Calculate new x/y to keep mouse position stable
+      // logic: mouseX_relative_to_viewbox_start_ratio should remain constant
+      const ratioX = (coords.x - prev.x) / prev.width;
+      const ratioY = (coords.y - prev.y) / prev.height;
+      
       return {
-        x: coords.x - (coords.x - prev.x) * widthRatio,
-        y: coords.y - (coords.y - prev.y) * heightRatio,
+        x: coords.x - ratioX * newWidth,
+        y: coords.y - ratioY * newHeight,
         width: newWidth,
         height: newHeight,
       };
@@ -389,21 +408,114 @@ export function TacticalMap({ selectedTool, onPlanetSelect, selectedPlanet }: Ta
         ))}
 
         {/* Grid coordinates */}
-        <g opacity="0.6">
-          {['C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U'].map((letter, i) => (
-            <g key={`letter-${letter}`}>
-              <text x={100 + i * 45} y={25} textAnchor="middle" fill="#00ffff" fontSize="16" fontFamily="'Share Tech Mono', monospace" fontWeight="bold" opacity="0.7">{letter}</text>
-              <text x={100 + i * 45} y={780} textAnchor="middle" fill="#00ffff" fontSize="16" fontFamily="'Share Tech Mono', monospace" fontWeight="bold" opacity="0.7">{letter}</text>
-            </g>
-          ))}
-        </g>
-        <g opacity="0.6">
-          {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map((num, i) => (
-            <g key={`num-${num}`}>
-              <text x={30} y={65 + i * 40} textAnchor="middle" fill="#00ffff" fontSize="16" fontFamily="'Share Tech Mono', monospace" fontWeight="bold" opacity="0.7">{num}</text>
-              <text x={970} y={65 + i * 40} textAnchor="middle" fill="#00ffff" fontSize="16" fontFamily="'Share Tech Mono', monospace" fontWeight="bold" opacity="0.7">{num}</text>
-            </g>
-          ))}
+        {/* Grid coordinates */}
+        <g opacity="0.5">
+          {/* Vertical Grid Lines & Labels A-T (20 columns) */}
+          {Array.from({ length: 20 }, (_, i) => {
+            const letter = String.fromCharCode(65 + i); // A-T
+            const x = 25 + i * 50; // 25 to 975
+            
+            // Calculate scale factor to keep text size constant on screen
+            const scale = viewBox.width / 1000;
+            const fontSize = 14 * scale;
+            const padding = 20 * scale;
+            
+            // Only render visual line if it's somewhat clear
+            const shouldRendertext = x >= viewBox.x && x <= viewBox.x + viewBox.width;
+            
+            return (
+              <g key={`grid-v-${letter}`}>
+                {/* Vertical line spans the full visible height plus buffer */}
+                <line 
+                  x1={x} 
+                  y1={viewBox.y - 100} 
+                  x2={x} 
+                  y2={viewBox.y + viewBox.height + 100} 
+                  stroke="#00ffff" 
+                  strokeWidth={0.5 * scale} 
+                  strokeDasharray={`${5 * scale},${5 * scale}`} 
+                  opacity="0.2" 
+                />
+                {shouldRendertext && (
+                  <>
+                    <text 
+                      x={x} 
+                      y={viewBox.y + padding} 
+                      textAnchor="middle" 
+                      fill="#00ffff" 
+                      fontSize={fontSize} 
+                      fontFamily="'Share Tech Mono', monospace" 
+                      fontWeight="bold" 
+                      opacity="0.8"
+                    >{letter}</text>
+                    <text 
+                      x={x} 
+                      y={viewBox.y + viewBox.height - padding/2} 
+                      textAnchor="middle" 
+                      fill="#00ffff" 
+                      fontSize={fontSize} 
+                      fontFamily="'Share Tech Mono', monospace" 
+                      fontWeight="bold" 
+                      opacity="0.8"
+                    >{letter}</text>
+                  </>
+                )}
+              </g>
+            );
+          })}
+          
+          {/* Horizontal Grid Lines & Labels 1-16 (16 rows) */}
+          {Array.from({ length: 16 }, (_, i) => {
+            const num = i + 1; // 1-16
+            const y = 25 + i * 50; // 25 to 775
+            
+            // Calculate scale factor
+            const scale = viewBox.width / 1000;
+            const fontSize = 14 * scale;
+            const padding = 20 * scale;
+            
+            const shouldRendertext = y >= viewBox.y && y <= viewBox.y + viewBox.height;
+            
+            return (
+              <g key={`grid-h-${num}`}>
+                {/* Horizontal line spans the full visible width plus buffer */}
+                <line 
+                  x1={viewBox.x - 100} 
+                  y1={y} 
+                  x2={viewBox.x + viewBox.width + 100} 
+                  y2={y} 
+                  stroke="#00ffff" 
+                  strokeWidth={0.5 * scale} 
+                  strokeDasharray={`${5 * scale},${5 * scale}`} 
+                  opacity="0.2" 
+                />
+                {shouldRendertext && (
+                  <>
+                    <text 
+                      x={viewBox.x + padding} 
+                      y={y + (fontSize * 0.35)} 
+                      textAnchor="middle" 
+                      fill="#00ffff" 
+                      fontSize={fontSize} 
+                      fontFamily="'Share Tech Mono', monospace" 
+                      fontWeight="bold" 
+                      opacity="0.8"
+                    >{num}</text>
+                    <text 
+                      x={viewBox.x + viewBox.width - padding} 
+                      y={y + (fontSize * 0.35)} 
+                      textAnchor="middle" 
+                      fill="#00ffff" 
+                      fontSize={fontSize} 
+                      fontFamily="'Share Tech Mono', monospace" 
+                      fontWeight="bold" 
+                      opacity="0.8"
+                    >{num}</text>
+                  </>
+                )}
+              </g>
+            );
+          })}
         </g>
 
         {/* Territories */}
