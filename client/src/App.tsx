@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Sidebar } from './components/Sidebar';
-import { TopNav } from './components/TopNav';
-import { PlanetInfoModal } from './components/PlanetInfoModal';
-import { TacticalMap } from './components/TacticalMap';
+import { Sidebar } from './components/layout/Sidebar';
+import { TopNav } from './components/layout/TopNav';
+import { PlanetInfoModal } from './components/modals/PlanetInfoModal';
+import { TacticalMap } from './components/map/TacticalMap';
 
 export default function App() {
   const [selectedTool, setSelectedTool] = useState<string>('select');

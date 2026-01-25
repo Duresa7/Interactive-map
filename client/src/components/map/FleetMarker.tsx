@@ -2,7 +2,7 @@ interface FleetMarkerProps {
   x: number;
   y: number;
   rotation: number;
-  faction: 'SITH' | 'REPUBLIC' | 'MANDALORE' | 'HUTT' | 'EMPIRE';
+  faction: string;
   size: number;
   id: string;
 }

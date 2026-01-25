@@ -38,6 +38,15 @@ interface DrawingPoint {
   y: number;
 }
 
+interface Fleet {
+  id: string;
+  x: number;
+  y: number;
+  rotation: number;
+  faction: string;
+  size: number;
+}
+
 // Galaxy Rings configuration - Old Republic Era
 const galaxyRings = [
   { id: 'deep-core', radius: 60, color: '#fbbf24', label: 'DEEP CORE', labelOffset: 35 },
@@ -58,11 +67,11 @@ const initialTerritories: Territory[] = [
   { id: 'hutt-space', points: '600,490 680,480 750,550 720,650 650,680 580,620', faction: 'HUTT', color: '#84cc16', label: 'HUTT SPACE' },
 ];
 
-const initialFleets = [
-  { id: 'fleet-1', x: 300, y: 200, rotation: 45, faction: 'SITH' as const, size: 12 },
-  { id: 'fleet-2', x: 600, y: 250, rotation: -120, faction: 'REPUBLIC' as const, size: 8 },
-  { id: 'fleet-3', x: 350, y: 500, rotation: 90, faction: 'MANDALORE' as const, size: 15 },
-  { id: 'fleet-4', x: 680, y: 550, rotation: 180, faction: 'REPUBLIC' as const, size: 6 },
+const initialFleets: Fleet[] = [
+  { id: 'fleet-1', x: 300, y: 200, rotation: 45, faction: 'SITH', size: 12 },
+  { id: 'fleet-2', x: 600, y: 250, rotation: -120, faction: 'REPUBLIC', size: 8 },
+  { id: 'fleet-3', x: 350, y: 500, rotation: 90, faction: 'MANDALORE', size: 15 },
+  { id: 'fleet-4', x: 680, y: 550, rotation: 180, faction: 'REPUBLIC', size: 6 },
 ];
 
 // Old Republic Era planets (circa 4000 BBY)
@@ -114,6 +123,14 @@ export function TacticalMap({ selectedTool, onPlanetSelect, selectedPlanet }: Ta
   const [showTerritoryModal, setShowTerritoryModal] = useState(false);
   const [newTerritoryName, setNewTerritoryName] = useState('');
   const [newTerritoryFaction, setNewTerritoryFaction] = useState('NEUTRAL');
+  
+  // Fleet deployment state
+  const [fleets, setFleets] = useState<Fleet[]>(initialFleets);
+  const [showFleetModal, setShowFleetModal] = useState(false);
+  const [pendingFleetPosition, setPendingFleetPosition] = useState<DrawingPoint | null>(null);
+  const [newFleetFaction, setNewFleetFaction] = useState('REPUBLIC');
+  const [newFleetSize, setNewFleetSize] = useState(5);
+  const [newFleetRotation, setNewFleetRotation] = useState(0);
   
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -215,6 +232,11 @@ export function TacticalMap({ selectedTool, onPlanetSelect, selectedPlanet }: Ta
     if (selectedTool === 'territory') {
       setDrawingPoints(prev => [...prev, coords]);
     }
+    
+    if (selectedTool === 'fleet') {
+      setPendingFleetPosition(coords);
+      setShowFleetModal(true);
+    }
   };
 
   const handleFinishTerritory = () => {
@@ -249,6 +271,30 @@ export function TacticalMap({ selectedTool, onPlanetSelect, selectedPlanet }: Ta
       setNewTerritoryName('');
       setNewTerritoryFaction('NEUTRAL');
     }
+  };
+
+  const handleSaveFleet = () => {
+    if (pendingFleetPosition) {
+      const newFleet: Fleet = {
+        id: `fleet-${Date.now()}`,
+        x: pendingFleetPosition.x,
+        y: pendingFleetPosition.y,
+        rotation: newFleetRotation,
+        faction: newFleetFaction,
+        size: newFleetSize,
+      };
+      setFleets(prev => [...prev, newFleet]);
+      setShowFleetModal(false);
+      setPendingFleetPosition(null);
+      setNewFleetFaction('REPUBLIC');
+      setNewFleetSize(5);
+      setNewFleetRotation(0);
+    }
+  };
+
+  const handleCancelFleet = () => {
+    setShowFleetModal(false);
+    setPendingFleetPosition(null);
   };
 
   const getFactionColor = (faction: string) => {
@@ -314,7 +360,7 @@ export function TacticalMap({ selectedTool, onPlanetSelect, selectedPlanet }: Ta
         ref={svgRef}
         className={`w-full h-full relative z-10 ${
           selectedTool === 'select' ? (draggingPlanet ? 'cursor-grabbing' : 'cursor-grab') : 
-          selectedTool === 'system' || selectedTool === 'territory' ? 'cursor-crosshair' : 'cursor-default'
+          selectedTool === 'system' || selectedTool === 'territory' || selectedTool === 'fleet' ? 'cursor-crosshair' : 'cursor-default'
         }`}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -411,7 +457,7 @@ export function TacticalMap({ selectedTool, onPlanetSelect, selectedPlanet }: Ta
         })}
 
         {/* Fleet markers */}
-        {initialFleets.map((fleet) => (
+        {fleets.map((fleet) => (
           <FleetMarker key={fleet.id} x={fleet.x} y={fleet.y} rotation={fleet.rotation} faction={fleet.faction} size={fleet.size} id={fleet.id} />
         ))}
 
@@ -478,6 +524,122 @@ export function TacticalMap({ selectedTool, onPlanetSelect, selectedPlanet }: Ta
       {selectedTool === 'system' && (
         <div className="absolute bottom-4 left-4 z-20 cut-corner bg-[#0a1628]/80 border border-cyan-500/30 backdrop-blur-sm px-4 py-2">
           <p className="text-cyan-400 text-xs font-mono uppercase tracking-wider">CLICK TO PLACE NEW SYSTEM</p>
+        </div>
+      )}
+
+      {/* Fleet tool indicator */}
+      {selectedTool === 'fleet' && !showFleetModal && (
+        <div className="absolute bottom-4 left-4 z-20 cut-corner bg-[#0a1628]/80 border border-orange-500/30 backdrop-blur-sm px-4 py-2" style={{ boxShadow: '0 0 15px rgba(249, 115, 22, 0.2)' }}>
+          <p className="text-orange-400 text-xs font-mono uppercase tracking-wider">CLICK TO DEPLOY FLEET</p>
+        </div>
+      )}
+
+      {/* Fleet deployment modal */}
+      {showFleetModal && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="cut-corner bg-[#0a1628]/95 border border-orange-500/50 p-6 w-96" style={{ boxShadow: '0 0 30px rgba(249, 115, 22, 0.4)' }}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-orange-400 text-sm font-mono uppercase tracking-wider" style={{ fontFamily: "'Orbitron', monospace" }}>
+                DEPLOY FLEET
+              </h3>
+              <button onClick={handleCancelFleet} className="text-red-400 hover:text-red-300">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Faction Selection */}
+              <div>
+                <label className="block text-orange-500 text-xs font-mono uppercase mb-2">Fleet Faction</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {FACTION_OPTIONS.filter(f => f.id !== 'CUSTOM').map((faction) => (
+                    <button
+                      key={faction.id}
+                      onClick={() => setNewFleetFaction(faction.id)}
+                      className={`cut-corner-sm px-3 py-2 text-xs font-mono uppercase transition-colors flex items-center gap-2 ${
+                        newFleetFaction === faction.id ? 'border-2' : 'border border-opacity-40'
+                      }`}
+                      style={{
+                        backgroundColor: `${faction.color}20`,
+                        borderColor: faction.color,
+                        color: faction.color,
+                      }}
+                    >
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: faction.color }} />
+                      {faction.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Fleet Size */}
+              <div>
+                <label className="block text-orange-500 text-xs font-mono uppercase mb-2">
+                  Fleet Size: <span className="text-orange-300">{newFleetSize} ships</span>
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min="1"
+                    max="30"
+                    value={newFleetSize}
+                    onChange={(e) => setNewFleetSize(parseInt(e.target.value))}
+                    className="flex-1 accent-orange-500"
+                  />
+                  <div className="cut-corner-sm bg-[#0f1b2e]/60 border border-orange-500/30 px-3 py-1 text-orange-200 font-mono text-sm w-16 text-center">
+                    {newFleetSize}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Fleet Rotation */}
+              <div>
+                <label className="block text-orange-500 text-xs font-mono uppercase mb-2">
+                  Movement Direction: <span className="text-orange-300">{newFleetRotation}°</span>
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min="0"
+                    max="360"
+                    value={newFleetRotation}
+                    onChange={(e) => setNewFleetRotation(parseInt(e.target.value))}
+                    className="flex-1 accent-orange-500"
+                  />
+                  <div className="cut-corner-sm bg-[#0f1b2e]/60 border border-orange-500/30 p-2 w-16 h-16 flex items-center justify-center">
+                    <svg width="40" height="40" viewBox="0 0 40 40">
+                      <circle cx="20" cy="20" r="18" fill="none" stroke="#f97316" strokeWidth="1" strokeOpacity="0.3" />
+                      <g transform={`rotate(${newFleetRotation}, 20, 20)`}>
+                        <polygon points="20,5 15,25 20,20 25,25" fill="#f97316" fillOpacity="0.7" stroke="#f97316" strokeWidth="1" />
+                      </g>
+                    </svg>
+                  </div>
+                </div>
+                <div className="flex justify-between mt-2 text-orange-600 text-xs font-mono">
+                  <button onClick={() => setNewFleetRotation(0)} className="hover:text-orange-400">↑ N</button>
+                  <button onClick={() => setNewFleetRotation(90)} className="hover:text-orange-400">→ E</button>
+                  <button onClick={() => setNewFleetRotation(180)} className="hover:text-orange-400">↓ S</button>
+                  <button onClick={() => setNewFleetRotation(270)} className="hover:text-orange-400">← W</button>
+                </div>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={handleCancelFleet}
+                  className="flex-1 cut-corner bg-gray-500/20 border border-gray-500/40 px-4 py-3 text-gray-400 text-xs font-mono uppercase hover:bg-gray-500/30 transition-colors"
+                >
+                  CANCEL
+                </button>
+                <button
+                  onClick={handleSaveFleet}
+                  className="flex-1 cut-corner bg-orange-500/20 border border-orange-500/40 px-4 py-3 text-orange-300 text-xs font-mono uppercase hover:bg-orange-500/30 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Check className="w-4 h-4" /> DEPLOY
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
